@@ -160,7 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const locationKeywords = [
         { keys: ["Jorbagh", "Sri Aurobindo Marg", "Jor Bagh", "Safdarjung Airport", "Safdarjung", "safdarjung Airport Area", "Satya Sadan"], short: "Jor Bagh" },
-        { keys: ["Rajaji Marg Vijay Chowk Area", "Vijay Chowk Area", "Sena Bhawan", "Sena Bhavan"], short: "Sena Bhawan" },
+        { keys: ["Rajaji Marg, Vijay Chowk Area", "Vijay Chowk Area", "Sena Bhawan", "Sena Bhavan", "Central Secretariat"], short: "Sena Bhawan" },
         { keys: ["Electronics Niketan", "CGO complex"], short: "Electronics Niketan" },
         { keys: ["Scope Complex"], short: "Scope Complex" },
         { keys: ["Punjabi Bagh", "Punjabi Bagh Enclave", "West Punjabi Bagh"], short: "Punjabi Bagh" },
