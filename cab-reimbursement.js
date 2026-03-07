@@ -28,6 +28,9 @@ document.addEventListener("DOMContentLoaded", () => {
         activeReceiptId: null,
         lastScrollPosition: 0,
         pdfViewer: { currentPage: 1, totalPages: 1 },
+        // Track active Flatpickr instances so we can destroy on re-render
+        datePickerInstances: [],
+        timePickerInstances: [],
     };
 
     // ─── CONSTANTS ────────────────────────────────────────────────────────────
@@ -35,6 +38,125 @@ document.addEventListener("DOMContentLoaded", () => {
     const TOTAL_REGEX = /Total\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d{1,2})?)/i;
     const RAPIDO_REGEX = /Selected\s*Price\s*(?:₹|Rs\.?|INR)?\s*(\d+(?:\.\d{1,2})?)/i;
     const CURRENCY_REGEX = /(?:₹|Rs\.?|INR)\s*(\d+(?:\.\d{1,2})?)/g;
+
+    const MAX_PDF_FILES = 50;
+    const MAX_PDF_SIZE = 1024 * 1024; // 1 MB
+    const MAX_SIGNATURE_SIZE = 2 * 1024 * 1024; // 2 MB
+
+    const NAME_MAX = 80;
+    const LOCATION_MAX = 120;
+    const PURPOSE_MAX = 120;
+
+    const MAX_BILL_AMOUNT = 100000; // 1 lakh
+
+    const MONTH_NAMES = [
+        "January","February","March","April","May","June",
+        "July","August","September","October","November","December"
+    ];
+
+    /**
+     * Parse "Month YYYY" → { monthIndex: 0-11, year: YYYY }
+     * Returns null when the string is not yet a valid month/year.
+     */
+    function parseMonthYear(value) {
+        const match = (value || "").match(
+            /^(January|February|March|April|May|June|July|August|September|October|November|December)\s(\d{4})$/i
+        );
+        if (!match) return null;
+        const monthIndex = MONTH_NAMES.findIndex(
+            m => m.toLowerCase() === match[1].toLowerCase()
+        );
+        return { monthIndex, year: parseInt(match[2], 10) };
+    }
+
+    /**
+     * Apply minDate / maxDate to every date picker based on the current
+     * Month field value.  Called whenever the month field changes AND
+     * right after date pickers are initialised.
+     *
+     * If the month field is blank / invalid → remove any range restriction.
+     * If the currently selected date falls outside the new range → clear it
+     * and show a toast so the user knows.
+     */
+    function updateDatePickerRanges() {
+        const parsed = parseMonthYear(els.monthInput.value.trim());
+
+        state.datePickerInstances.forEach(fp => {
+            if (parsed) {
+                const firstDay = new Date(parsed.year, parsed.monthIndex, 1);
+                const lastDay  = new Date(parsed.year, parsed.monthIndex + 1, 0);
+
+                fp.set("minDate", firstDay);
+                fp.set("maxDate", lastDay);
+
+                // Jump the calendar view to the selected month
+                fp.jumpToDate(firstDay, false);
+
+                // If a date is already selected but now out of range → clear it
+                if (fp.selectedDates.length) {
+                    const sel = fp.selectedDates[0];
+                    if (sel < firstDay || sel > lastDay) {
+                        fp.clear();
+                        showToast("Date cleared — outside selected month", "info", 3000);
+                    }
+                }
+            } else {
+                // No valid month → lift restrictions
+                fp.set("minDate", null);
+                fp.set("maxDate", null);
+            }
+        });
+    }
+
+    function isValidDate(dateStr) {
+
+        if (!/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) return false;
+
+        const [dd, mm, yyyy] = dateStr.split("-").map(Number);
+
+        if (yyyy < 2000 || yyyy > 2100) return false;
+        if (mm < 1 || mm > 12) return false;
+
+        const days = new Date(yyyy, mm, 0).getDate();
+
+        if (dd < 1 || dd > days) return false;
+
+        return true;
+    }
+
+    function isValidTime(timeStr) {
+
+        // Accept both "02:30 PM" (manually typed) and "2:30 PM" (Flatpickr h format)
+        const match = timeStr.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+        if (!match) return false;
+
+        const hh = parseInt(match[1]);
+        const mm = parseInt(match[2]);
+
+        if (hh < 1 || hh > 12) return false;
+        if (mm < 0 || mm > 59) return false;
+
+        return true;
+    }
+    function isValidLocation(loc) {
+        return loc && loc.length >= 3 && loc.length <= LOCATION_MAX;
+    }
+
+    function isValidName(name) {
+
+        if (!name) return false;
+
+        if (name.length > NAME_MAX) return false;
+
+        return /^[a-zA-Z\s._-]+$/.test(name);
+    }
+
+    function isValidMonthYear(value) {
+
+        const match = value.match(/^(January|February|March|April|May|June|July|August|September|October|November|December)\s\d{4}$/i);
+
+        return !!match;
+    }
 
     const locationKeywords = [
         { keys: ["Jorbagh", "Sri Aurobindo Marg", "Jor Bagh", "Safdarjung Airport", "Safdarjung", "safdarjung Airport Area", "Satya Sadan"], short: "Jor Bagh" },
@@ -103,28 +225,14 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // ─── VALIDATION ALERT — highlights the exact field ───────────────────────
-    /**
-     * Shows a polished SweetAlert2 error.
-     * If rowIndex & fieldName are provided, also highlights the offending input
-     * and scrolls the table row into view.
-     *
-     * @param {string}  title
-     * @param {string}  message
-     * @param {number}  [rowIndex]    0-based row in cabTableBody
-     * @param {string}  [fieldName]   'date'|'time'|'from'|'to'|'amount'|'purpose'
-     * @param {Element} [focusEl]     fallback element to focus (side-panel inputs)
-     */
     function showValidationError(title, message, rowIndex, fieldName, focusEl) {
-        // Highlight table cell if specified
         if (rowIndex !== undefined && fieldName !== undefined) {
             highlightTableField(rowIndex, fieldName);
         }
-        // Highlight side-panel input
         if (focusEl) {
             focusEl.classList.add("input-error");
             focusEl.focus();
             focusEl.scrollIntoView({ behavior: "smooth", block: "center" });
-            // Auto-clear error on next input
             focusEl.addEventListener("input", () => focusEl.classList.remove("input-error"), { once: true });
         }
 
@@ -144,9 +252,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    /**
-     * Map fieldName to the correct input inside a table row and apply error style.
-     */
     function highlightTableField(rowIndex, fieldName) {
         const row = els.cabTableBody.rows[rowIndex];
         if (!row) return;
@@ -165,13 +270,10 @@ document.addEventListener("DOMContentLoaded", () => {
         input.classList.add("input-error");
         row.classList.add("row-error");
 
-        // Scroll to that row smoothly
         row.scrollIntoView({ behavior: "smooth", block: "nearest" });
 
-        // Focus after a tick (to let SweetAlert take over)
         setTimeout(() => input.focus(), 600);
 
-        // Auto-clear highlight on fix
         input.addEventListener("input", () => {
             input.classList.remove("input-error");
             row.classList.remove("row-error");
@@ -213,15 +315,15 @@ document.addEventListener("DOMContentLoaded", () => {
     els.signatureInput.addEventListener("change", e => {
         const file = e.target.files[0];
         if (!file) return;
+        const allowed = ["image/jpeg", "image/jpg", "image/png", "image/webp"];
 
-        if (!["image/jpeg", "image/jpg", "image/png"].includes(file.type)) {
-            showError("Invalid Format", "Signature must be JPG or PNG.");
-            e.target.value = "";
+        if (!allowed.includes(file.type)) {
+            showError("Invalid Format", "Signature must be JPG, PNG or WEBP.");
             return;
         }
-        if (file.size > 1024 * 1024) {
-            showError("File Too Large", "Signature must be under 1 MB.");
-            e.target.value = "";
+
+        if (file.size > MAX_SIGNATURE_SIZE) {
+            showError("File Too Large", "Signature must be under 2MB.");
             return;
         }
         const reader = new FileReader();
@@ -299,7 +401,6 @@ document.addEventListener("DOMContentLoaded", () => {
             const pdf = receipt.pdfDoc;
             const totalPages = pdf.numPages;
 
-            // Two RAF ticks + small delay to let the viewer paint before measuring
             await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
             await new Promise(r => setTimeout(r, 40));
 
@@ -409,7 +510,11 @@ document.addEventListener("DOMContentLoaded", () => {
         const files = Array.from(fileList);
         if (!files.length) return;
 
-        // Validate before any heavy work
+        if (files.length > MAX_PDF_FILES) {
+            showError("Too Many Files", "Maximum 50 PDFs allowed at once.");
+            return;
+        }
+
         for (const file of files) {
             if (file.type !== "application/pdf") {
                 showError("Invalid File", `"${file.name}" is not a PDF.`);
@@ -424,15 +529,12 @@ document.addEventListener("DOMContentLoaded", () => {
         showLoading(`Processing ${files.length} receipt${files.length > 1 ? "s" : ""}…`);
 
         try {
-            // Process sequentially to avoid memory spikes on mobile
-            // for (const file of files) await processReceipt(file);
             for (let i = 0; i < files.length; i++) {
 
                 const file = files[i];
 
                 updateLoadingText(`Processing receipt ${i + 1} of ${files.length}...`);
 
-                // optional progress bar
                 const percent = Math.round(((i + 1) / files.length) * 100);
 
                 if (els.pdfProgressFill) {
@@ -443,7 +545,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 await processReceipt(file);
 
-                // allow UI to repaint (important!)
                 await new Promise(requestAnimationFrame);
             }
         } catch (err) {
@@ -646,7 +747,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
         els.receiptGrid.appendChild(frag);
 
-        // Render thumbnails lazily via requestIdleCallback (or fallback rAF)
         const scheduleThumb = window.requestIdleCallback
             ? cb => requestIdleCallback(cb, { timeout: 800 })
             : cb => requestAnimationFrame(cb);
@@ -689,6 +789,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
     // ─── RENDER TABLE ─────────────────────────────────────────────────────────
     function renderTable() {
+        // Destroy any existing Flatpickr instances before clearing the DOM
+        destroyDateTimePickers();
+
         els.cabTableBody.innerHTML = "";
         let total = 0;
         const frag = document.createDocumentFragment();
@@ -700,10 +803,22 @@ document.addEventListener("DOMContentLoaded", () => {
             const row = document.createElement("tr");
             row.innerHTML = `
                 <td style="color:#9ca3af;font-size:12px;">${index + 1}</td>
-                <td><input type="text"   placeholder="DD-MM-YYYY"  class="table-input" value="${receipt.data.date || ""}"></td>
-                <td><input type="text"   placeholder="HH:MM AM/PM" class="table-input" value="${receipt.data.time || ""}"></td>
-                <td><input type="text"   placeholder="From location" class="table-input" value="${receipt.data.fromLoc || ""}"></td>
-                <td><input type="text"   placeholder="To location"   class="table-input" value="${receipt.data.toLoc || ""}"></td>
+                <td>
+                    <div class="picker-cell">
+                        <input type="text" placeholder="DD-MM-YYYY" class="table-input date-input"
+                            value="${receipt.data.date || ""}" autocomplete="off" readonly>
+                        <i class="fa-regular fa-calendar picker-icon date-icon"></i>
+                    </div>
+                </td>
+                <td>
+                    <div class="picker-cell">
+                        <input type="text" placeholder="HH:MM AM/PM" class="table-input time-input"
+                            value="${receipt.data.time || ""}" autocomplete="off" readonly>
+                        <i class="fa-regular fa-clock picker-icon time-icon"></i>
+                    </div>
+                </td>
+                <td><input maxlength="120" type="text" placeholder="From location" class="table-input" value="${receipt.data.fromLoc || ""}"></td>
+                <td><input maxlength="120" type="text" placeholder="To location"   class="table-input" value="${receipt.data.toLoc || ""}"></td>
                 <td><input type="number" placeholder="0.00" class="table-input"
                         value="${amount > 0 ? amount.toFixed(2) : ""}"
                         min="0" step="0.01" oninput="updateTotal()"></td>
@@ -712,13 +827,97 @@ document.addEventListener("DOMContentLoaded", () => {
                         <option value="Official">Official</option>
                         <option value="Other">Other</option>
                     </select>
-                    <input type="text" placeholder="Enter purpose" class="table-input hidden" style="margin-top:4px;">
+                    <input maxlength="120" type="text" placeholder="Enter purpose" class="table-input hidden" style="margin-top:4px;">
                 </td>`;
             frag.appendChild(row);
         });
 
         els.cabTableBody.appendChild(frag);
         els.uiTotalAmount.textContent = "Rs. " + total.toFixed(2);
+
+        // Initialise pickers after DOM is ready
+        requestAnimationFrame(() => initDateTimePickers());
+    }
+
+    // ─── DATE / TIME PICKERS ──────────────────────────────────────────────────
+
+    /**
+     * Destroy all tracked Flatpickr instances (called before re-render).
+     */
+    function destroyDateTimePickers() {
+        state.datePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) {} });
+        state.timePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) {} });
+        state.datePickerInstances = [];
+        state.timePickerInstances = [];
+    }
+
+    /**
+     * Attach Flatpickr to every date-input and time-input in the table.
+     * Called once after the table is rendered.
+     */
+    function initDateTimePickers() {
+        // Pre-compute month range so the calendar opens on the right month
+        const parsedMonth = parseMonthYear(els.monthInput.value.trim());
+        const rangeMin = parsedMonth
+            ? new Date(parsedMonth.year, parsedMonth.monthIndex, 1)
+            : new Date(2000, 0, 1);
+        const rangeMax = parsedMonth
+            ? new Date(parsedMonth.year, parsedMonth.monthIndex + 1, 0)
+            : new Date(2100, 11, 31);
+
+        // ── Date pickers ──────────────────────────────────────────────────────
+        els.cabTableBody.querySelectorAll(".date-input").forEach(input => {
+            const fp = flatpickr(input, {
+                dateFormat: "d-m-Y",
+                allowInput: true,
+                disableMobile: true,
+                todayHighlight: true,
+                closeOnSelect: true,
+                minDate: rangeMin,
+                maxDate: rangeMax,
+                // NOTE: no defaultDate here — that would overwrite extracted values.
+                // Instead we jump the *view* (not the value) when the calendar opens.
+                onOpen() {
+                    // If no date is selected yet, scroll the calendar view to the
+                    // selected month so the user doesn't have to navigate manually.
+                    if (!fp.selectedDates.length && parsedMonth) {
+                        fp.jumpToDate(rangeMin, false);
+                    }
+                },
+                onClose(selectedDates) {
+                    if (selectedDates.length) {
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                },
+            });
+            state.datePickerInstances.push(fp);
+        });
+
+        // ── Time pickers ──────────────────────────────────────────────────────
+        els.cabTableBody.querySelectorAll(".time-input").forEach(input => {
+            const fp = flatpickr(input, {
+                // Time-only mode
+                enableTime: true,
+                noCalendar: true,
+                // 12-hour clock with AM/PM → "02:30 PM"
+                time_24hr: false,
+                // Output format → HH:MM AM/PM (matches isValidTime regex)
+                dateFormat: "h:i K",
+                allowInput: true,
+                disableMobile: true,
+                // 5-minute steps for convenience
+                minuteIncrement: 5,
+                onClose(selectedDates) {
+                    if (selectedDates.length) {
+                        input.dispatchEvent(new Event("input", { bubbles: true }));
+                    }
+                },
+            });
+            state.timePickerInstances.push(fp);
+        });
+
+        // Apply month range immediately so existing extracted dates are validated
+        updateDatePickerRanges();
     }
 
     // ─── DELETE RECEIPT ───────────────────────────────────────────────────────
@@ -732,6 +931,7 @@ document.addEventListener("DOMContentLoaded", () => {
             els.stepEditor.classList.add("hidden");
             els.stepUpload.classList.remove("hidden");
             state.monthCounts = {};
+            destroyDateTimePickers();
         } else {
             state.receipts.forEach((r, i) => (r.order = i));
             renderReceiptCards();
@@ -747,8 +947,25 @@ document.addEventListener("DOMContentLoaded", () => {
         for (const [month, count] of Object.entries(state.monthCounts)) {
             if (count > max) { max = count; best = month; }
         }
-        if (best) els.monthInput.value = best;
+        if (best) {
+            els.monthInput.value = best;
+            // Sync the calendar range to the newly detected month
+            updateDatePickerRanges();
+        }
     }
+
+    // Re-apply range whenever the user manually edits the Month field
+    let monthDebounceTimer = null;
+    els.monthInput.addEventListener("input", () => {
+        clearTimeout(monthDebounceTimer);
+        monthDebounceTimer = setTimeout(() => {
+            updateDatePickerRanges();
+            // Visual feedback when a valid month is entered
+            if (parseMonthYear(els.monthInput.value.trim())) {
+                showToast(`Calendar locked to ${els.monthInput.value.trim()}`, "info", 2200);
+            }
+        }, 400);
+    });
 
     // ─── TOGGLE PURPOSE ───────────────────────────────────────────────────────
     window.togglePurpose = function (select) {
@@ -773,7 +990,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 total += parseFloat(tr.children[5]?.querySelector("input")?.value) || 0;
             });
             els.uiTotalAmount.textContent = "Rs. " + total.toFixed(2);
-        }, 80); // 80 ms debounce — imperceptible but prevents per-keystroke thrash
+        }, 80);
     };
 
     // ─── HELPERS ──────────────────────────────────────────────────────────────
@@ -799,13 +1016,11 @@ document.addEventListener("DOMContentLoaded", () => {
         document.body.removeChild(a);
     }
 
-    // Loading overlay helpers
     function showLoading(msg) {
         if (els.loadingText) els.loadingText.textContent = msg || "Processing…";
         els.loadingOverlay.classList.remove("hidden");
         els.loadingOverlay.classList.add("flex");
-
-        updateCircleProgress(0); // reset progress
+        updateCircleProgress(0);
         setGenerateBtnLoading(true);
     }
     function updateLoadingText(msg) {
@@ -831,18 +1046,31 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const nameVal = els.empNameInput.value.trim();
-        if (!nameVal) {
-            showValidationError("Missing Name", "Please enter the employee name.", undefined, undefined, els.empNameInput);
+        if (!isValidName(nameVal)) {
+            showValidationError(
+                "Invalid Name",
+                "Please enter a valid employee name (letters only).",
+                undefined, undefined, els.empNameInput
+            );
             return;
         }
+
+        const monthVal = els.monthInput.value.trim();
+        if (!isValidMonthYear(monthVal)) {
+            showValidationError(
+                "Invalid Month",
+                "Month must be like 'January 2026'.",
+                undefined, undefined, els.monthInput
+            );
+            return;
+        }
+
         const desigVal = els.designationInput.value.trim();
         if (!desigVal) {
             showValidationError("Missing Designation", "Please enter the designation.", undefined, undefined, els.designationInput);
             return;
         }
 
-        const dateRegex = /^\d{2}-\d{2}-\d{4}$/;
-        const timeRegex = /^\d{2}:\d{2}\s*(AM|PM)$/i;
         let validationError = null;
         let errorRow = null;
         let errorField = null;
@@ -862,28 +1090,36 @@ document.addEventListener("DOMContentLoaded", () => {
                 validationError = `Row #${rowNum}: Date is missing.`;
                 errorRow = i; errorField = "date"; return false;
             }
-            if (!dateRegex.test(date)) {
-                validationError = `Row #${rowNum}: Date "${date}" is invalid — use DD-MM-YYYY.`;
+            if (!isValidDate(date)) {
+                validationError = `Row #${rowNum}: Invalid date. Use DD-MM-YYYY.`;
                 errorRow = i; errorField = "date"; return false;
             }
             if (!time) {
                 validationError = `Row #${rowNum}: Time is missing.`;
                 errorRow = i; errorField = "time"; return false;
             }
-            if (!timeRegex.test(time)) {
-                validationError = `Row #${rowNum}: Time "${time}" is invalid — use HH:MM AM/PM.`;
+            if (!isValidTime(time)) {
+                validationError = `Row #${rowNum}: Invalid time. Use HH:MM AM/PM.`;
                 errorRow = i; errorField = "time"; return false;
             }
             if (!from) {
                 validationError = `Row #${rowNum}: "From" location is missing.`;
                 errorRow = i; errorField = "from"; return false;
             }
+            if (!isValidLocation(from)) {
+                validationError = `Row #${rowNum}: From location must be 3-120 characters.`;
+                errorRow = i; errorField = "from"; return false;
+            }
             if (!to) {
                 validationError = `Row #${rowNum}: "To" location is missing.`;
                 errorRow = i; errorField = "to"; return false;
             }
-            if (!amount || amount <= 0) {
-                validationError = `Row #${rowNum}: Amount must be greater than 0.`;
+            if (!isValidLocation(to)) {
+                validationError = `Row #${rowNum}: To location must be 3-120 characters.`;
+                errorRow = i; errorField = "to"; return false;
+            }
+            if (!amount || amount <= 0 || amount > MAX_BILL_AMOUNT) {
+                validationError = `Row #${rowNum}: Amount must be between ₹1 and ₹100000.`;
                 errorRow = i; errorField = "amount"; return false;
             }
             if (purposeSelect.value === "Other" && !purposeInput.value.trim()) {
@@ -903,12 +1139,12 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF("p", "mm", "a4");
-            const pageW = doc.internal.pageSize.getWidth();   // 210 mm
-            const pageH = doc.internal.pageSize.getHeight();  // 297 mm
-            const LEFT = 14;   // left margin
-            const RIGHT = 14;   // right margin
-            const BOTTOM = 18;   // bottom safe margin
-            const USABLE = pageW - LEFT - RIGHT;  // 182 mm usable width
+            const pageW = doc.internal.pageSize.getWidth();
+            const pageH = doc.internal.pageSize.getHeight();
+            const LEFT = 14;
+            const RIGHT = 14;
+            const BOTTOM = 18;
+            const USABLE = pageW - LEFT - RIGHT;
 
             const month = (els.monthInput.value || "").trim().replace(/\s+/g, "_");
             const firstName = getFirstName(nameVal);
@@ -948,10 +1184,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ]);
             });
 
-            // ── Column widths (must sum to USABLE = 182 mm) ──
-            // S.No(10) + Date(25) + Time(22) + From(37) + To(37) + Amount(27) + Purpose(24) = 182
             const colW = { sno: 10, date: 25, time: 22, from: 37, to: 37, amount: 27, purpose: 24 };
-
             const cellPad = { top: 3.5, bottom: 3.5, left: 3, right: 3 };
 
             doc.autoTable({
@@ -989,39 +1222,25 @@ document.addEventListener("DOMContentLoaded", () => {
                     valign: "middle",
                     overflow: "linebreak",
                 },
-                alternateRowStyles: {
-                    fillColor: [250, 250, 252],
-                },
-                styles: {
-                    font: "helvetica",
-                    overflow: "linebreak",
-                },
-                // Repeat header on every new page
+                alternateRowStyles: { fillColor: [250, 250, 252] },
+                styles: { font: "helvetica", overflow: "linebreak" },
                 showHead: "everyPage",
-                // Add page number in footer of each page
                 didDrawPage: (data) => {
                     const pgNum = doc.internal.getNumberOfPages();
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(8);
                     doc.setTextColor(150, 150, 150);
-                    doc.text(
-                        `Page ${pgNum}`,
-                        pageW / 2, pageH - 8,
-                        { align: "center" }
-                    );
+                    doc.text(`Page ${pgNum}`, pageW / 2, pageH - 8, { align: "center" });
                     doc.setTextColor(0, 0, 0);
                 },
             });
 
             let y = doc.lastAutoTable.finalY + 10;
 
-            // ── Total badge ──
             const totalText = `Total Amount: Rs. ${pdfTotal.toFixed(2)}`;
             doc.setFontSize(10);
             doc.setFont("helvetica", "bold");
 
-            // Estimate space needed for the footer block:
-            // total(8) + gap(10) + decl_heading(6) + decl_body(16) + gap(8) + sig(18) + name(8) + desig(6) = ~80mm
             const FOOTER_HEIGHT = 82;
             if (y + FOOTER_HEIGHT > pageH - BOTTOM) {
                 doc.addPage();
@@ -1034,7 +1253,6 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.text(totalText, LEFT, y);
             y += 12;
 
-            // ── Declaration ──
             doc.setFontSize(10);
             doc.setFont("helvetica", "bold");
             doc.text("Declaration:", LEFT, y);
@@ -1046,16 +1264,14 @@ document.addEventListener("DOMContentLoaded", () => {
                 "I have not availed the cab services for any personal purposes and all the bills " +
                 "submitted are true and original. I claim full responsibility for the details furnished in this annexure.";
 
-            // Split manually so we know exact line count & height
             const declLines = doc.splitTextToSize(declaration, USABLE);
-            const lineH = 5;   // 9pt at standard leading ≈ 5mm per line
+            const lineH = 5;
             doc.text(declLines, LEFT, y);
             y += declLines.length * lineH + 10;
 
-            // ── Signature & Name block ──
             const SIG_W = 42;
             const SIG_H = 16;
-            const NAME_X = pageW - RIGHT;   // right-aligned to margin
+            const NAME_X = pageW - RIGHT;
 
             const signFile = els.signatureInput.files[0];
             if (signFile) {
@@ -1064,11 +1280,9 @@ document.addEventListener("DOMContentLoaded", () => {
                 doc.addImage(imgData, format, NAME_X - SIG_W, y, SIG_W, SIG_H);
                 y += SIG_H + 3;
             } else {
-                // blank line above name when no signature
                 y += 6;
             }
 
-            // Thin underline for signature area
             doc.setDrawColor(180, 180, 180);
             doc.setLineWidth(0.3);
             doc.line(NAME_X - SIG_W - 4, y - 1, NAME_X, y - 1);
@@ -1081,7 +1295,6 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8.5);
             doc.setTextColor(80, 80, 80);
-            // Wrap designation if long
             const desigLines = doc.splitTextToSize(desigVal, SIG_W + 4);
             doc.text(desigLines, NAME_X, y + 10, { align: "right" });
 
@@ -1150,11 +1363,16 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function updateCircleProgress(percent) {
-
         const circle = document.querySelector(".progress-ring-circle");
         if (!circle) return;
-
         const offset = circumference - (percent / 100) * circumference;
         circle.style.strokeDashoffset = offset;
     }
+
+    document.addEventListener("input", e => {
+        if (e.target.matches(".table-input")) {
+            e.target.value = e.target.value.replace(/[<>]/g, "");
+        }
+    });
+
 });
