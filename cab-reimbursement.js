@@ -160,11 +160,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
     const locationKeywords = [
         { keys: ["Jorbagh", "Sri Aurobindo Marg", "Jor Bagh", "Safdarjung Airport", "Safdarjung", "safdarjung Airport Area", "Satya Sadan"], short: "Jor Bagh" },
-        { keys: ["Rajaji Marg Vijay Chowk Area", "Vijay Chowk Area"], short: "Sena Bhawan" },
+        { keys: ["Rajaji Marg Vijay Chowk Area", "Vijay Chowk Area", "Sena Bhawan", "Sena Bhavan"], short: "Sena Bhawan" },
         { keys: ["Electronics Niketan", "CGO complex"], short: "Electronics Niketan" },
         { keys: ["Scope Complex"], short: "Scope Complex" },
         { keys: ["Punjabi Bagh", "Punjabi Bagh Enclave", "West Punjabi Bagh"], short: "Punjabi Bagh" },
-        { keys: ["GPO Complex", "Barapullah Rd", "Aviation Colony", "INA Colony"], short: "Ayush Bhavan" },
+        { keys: ["GPO Complex", "Barapullah Rd", "Aviation Colony", "INA Colony", "Ayush Bhavan", "Ayush Bhawan"], short: "Ayush Bhawan" },
         { keys: ["INA Metro Station"], short: "INA Metro Station" },
         { keys: ["Directorate General of Information Systems", "Shankar Vihar"], short: "DGIS" },
         { keys: ["Central Secretariat", "Udyog Bhawan"], short: "Central Secretariat" },
@@ -173,7 +173,10 @@ document.addEventListener("DOMContentLoaded", () => {
         { keys: ["IGNOU", "Indira Gandhi National Open University"], short: "IGNOU" },
         { keys: ["Defence Colony"], short: "Defence Colony" },
         { keys: ["KG Marg", "KG M arg"], short: "KG Marg" },
-    ];
+		{ keys: ["Nausena Bhawan", "Nausena Bhavan" , "Nau Sena Bhawan" ,  "NCN Centre", "Near Raksha Sampda Bhawan"], short: "Nau Sena Bhawan" },
+		{ keys: ["DCN Palam"], short: "DCN Palam" },
+   
+   ];
 
     // ─── DOM CACHE ────────────────────────────────────────────────────────────
     const $ = id => document.getElementById(id);
