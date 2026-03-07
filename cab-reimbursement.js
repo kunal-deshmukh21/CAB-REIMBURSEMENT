@@ -173,10 +173,13 @@ document.addEventListener("DOMContentLoaded", () => {
         { keys: ["IGNOU", "Indira Gandhi National Open University"], short: "IGNOU" },
         { keys: ["Defence Colony"], short: "Defence Colony" },
         { keys: ["KG Marg", "KG M arg"], short: "KG Marg" },
-		{ keys: ["Nausena Bhawan", "Nausena Bhavan" , "Nau Sena Bhawan" ,  "NCN Centre", "Near Raksha Sampda Bhawan"], short: "Nau Sena Bhawan" },
-		{ keys: ["DCN Palam"], short: "DCN Palam" },
-   
-   ];
+        { keys: ["Nausena Bhawan", "Nausena Bhavan", "Nau Sena Bhawan", "NCN Centre", "Near Raksha Sampda Bhawan"], short: "Nau Sena Bhawan" },
+        { keys: ["DCN Palam"], short: "DCN Palam" },
+        { keys: ["Rajaji Marg", "Meena Bagh", "Krishna Manon Lane Area","HQIDS Kashmir House","Kashmir House"], short: "Kashmir House" },
+        { keys: ["UPSC Bhavan", "UPSC Bhawan", "Man Singh Road Area","UPSC"], short: "UPSC" },
+
+
+    ];
 
     // ─── DOM CACHE ────────────────────────────────────────────────────────────
     const $ = id => document.getElementById(id);
@@ -1361,8 +1364,10 @@ document.addEventListener("DOMContentLoaded", () => {
     async function generateMergedReceiptsPDF() {
         const { PDFDocument } = PDFLib;
         const merged = await PDFDocument.create();
+        const sortedReceipts = [...state.receipts].sort((a, b) => a.order - b.order);
 
-        for (const r of state.receipts) {
+
+        for (const r of sortedReceipts) {
             const bytes = await r.file.arrayBuffer();
             const pdf = await PDFDocument.load(bytes);
             const pages = await merged.copyPages(pdf, pdf.getPageIndices());
