@@ -50,8 +50,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const MAX_BILL_AMOUNT = 100000; // 1 lakh
 
     const MONTH_NAMES = [
-        "January","February","March","April","May","June",
-        "July","August","September","October","November","December"
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December"
     ];
 
     /**
@@ -84,7 +84,7 @@ document.addEventListener("DOMContentLoaded", () => {
         state.datePickerInstances.forEach(fp => {
             if (parsed) {
                 const firstDay = new Date(parsed.year, parsed.monthIndex, 1);
-                const lastDay  = new Date(parsed.year, parsed.monthIndex + 1, 0);
+                const lastDay = new Date(parsed.year, parsed.monthIndex + 1, 0);
 
                 fp.set("minDate", firstDay);
                 fp.set("maxDate", lastDay);
@@ -845,8 +845,8 @@ document.addEventListener("DOMContentLoaded", () => {
      * Destroy all tracked Flatpickr instances (called before re-render).
      */
     function destroyDateTimePickers() {
-        state.datePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) {} });
-        state.timePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) {} });
+        state.datePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) { } });
+        state.timePickerInstances.forEach(fp => { try { fp.destroy(); } catch (_) { } });
         state.datePickerInstances = [];
         state.timePickerInstances = [];
     }
@@ -1271,33 +1271,61 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const SIG_W = 42;
             const SIG_H = 16;
-            const NAME_X = pageW - RIGHT;
+            const RIGHT_X = pageW - RIGHT;
 
             const signFile = els.signatureInput.files[0];
-            if (signFile) {
-                const imgData = await fileToBase64(signFile);
-                const format = signFile.type === "image/png" ? "PNG" : "JPEG";
-                doc.addImage(imgData, format, NAME_X - SIG_W, y, SIG_W, SIG_H);
-                y += SIG_H + 3;
-            } else {
-                y += 6;
-            }
 
-            doc.setDrawColor(180, 180, 180);
-            doc.setLineWidth(0.3);
-            doc.line(NAME_X - SIG_W - 4, y - 1, NAME_X, y - 1);
-
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(0, 0, 0);
-            doc.text(nameVal, NAME_X, y + 4, { align: "right" });
-
+            // Prepare designation lines
             doc.setFont("helvetica", "normal");
             doc.setFontSize(8.5);
-            doc.setTextColor(80, 80, 80);
-            const desigLines = doc.splitTextToSize(desigVal, SIG_W + 4);
-            doc.text(desigLines, NAME_X, y + 10, { align: "right" });
+            const desigLines = doc.splitTextToSize(desigVal, SIG_W);
 
+            // signature block start
+            let blockTop = y;
+
+            // draw signature if present
+            if (signFile) {
+
+                const imgData = await fileToBase64(signFile);
+                const format = signFile.type === "image/png" ? "PNG" : "JPEG";
+
+                doc.addImage(imgData, format, RIGHT_X - SIG_W, blockTop, SIG_W, SIG_H);
+
+                blockTop += SIG_H + 2;
+                // draw signature line
+                doc.setDrawColor(180, 180, 180);
+                doc.setLineWidth(0.3);
+                doc.line(RIGHT_X - SIG_W, blockTop, RIGHT_X, blockTop);
+
+            }
+
+
+
+            // NAME
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(9);
+
+            const nameWidth = doc.getTextWidth(nameVal);
+            const nameX = RIGHT_X - (SIG_W / 2) - (nameWidth / 2);
+
+            doc.text(nameVal, nameX, blockTop + 5);
+
+            // DESIGNATION
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(8.5);
+
+            let roleY = blockTop + 10;
+
+            desigLines.forEach(line => {
+
+                const lineWidth = doc.getTextWidth(line);
+                const lineX = RIGHT_X - (SIG_W / 2) - (lineWidth / 2);
+
+                doc.text(line, lineX, roleY);
+
+                roleY += 4;
+
+            });
             // ── Merge receipts ──
             updateLoadingText("Merging receipt PDFs…");
             const annexureBlob = doc.output("blob");
