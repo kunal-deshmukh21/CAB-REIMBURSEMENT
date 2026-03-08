@@ -11,21 +11,21 @@
   <link
     href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap"
     rel="stylesheet">
-	
+
   <!-- Flatpickr -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
   <link rel="stylesheet" href="cab-reimbursement.css">
-  
-  
-  <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>  
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+
+
+  <script defer src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
 
 </head>
 
@@ -51,14 +51,14 @@
         </div>
 
         <div id="dropZone" class="drop-zone" onclick="document.getElementById('fileInput').click()">
-          <i class="fa-regular fa-file-pdf"></i>
+          <i class="fa-solid fa-file-pdf"></i>
           <strong>Drag & drop PDF files here</strong>
           <em>Supports Uber, Ola, Rapido receipts</em>
         </div>
 
         <p class="upload-hint">
           <i class="fa-solid fa-lock"></i>
-           Max 1 MB per file
+          Max 2 MB per file
         </p>
       </div>
       <input type="file" id="fileInput" accept=".pdf" multiple hidden>
@@ -122,7 +122,7 @@
             <table id="cabTable" class="cab-table">
               <thead>
                 <tr>
-                  <th>S. No.</th>
+                  <th>S. No</th>
                   <th>Date</th>
                   <th>Time</th>
                   <th>From</th>
@@ -241,7 +241,7 @@
     <p class="loading-text" id="loadingText">Processing receipts…</p>
   </div>
 
-  <script src="cab-reimbursement.js"></script>
+  <script defer src="cab-reimbursement.js"></script>
 </body>
 
 </html>

@@ -614,7 +614,7 @@ body {
 /* ─── COLUMN WIDTHS ─────────────────────────────────── */
 /* S.No */
 .cab-table th:nth-child(1),
-.cab-table td:nth-child(1) { width: 46px;  min-width: 46px; }
+.cab-table td:nth-child(1) { width: 58px;  min-width: 58px; }
 /*
  * Date — DD-MM-YYYY is 10 chars.
  * Budget: cell-padding(20px) + input-padding(14px) + icon(24px) + text(~80px) = 138px

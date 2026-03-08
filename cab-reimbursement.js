@@ -1,7 +1,4 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// CAB REIMBURSEMENT — Optimised JS (v3 — Rapido location fix)
-// ─────────────────────────────────────────────────────────────────────────────
-const DEBUG = true;
+const DEBUG = false;
 
 document.addEventListener("DOMContentLoaded", () => {
 
@@ -471,7 +468,7 @@ document.addEventListener("DOMContentLoaded", () => {
         if (DEBUG) console.log("normalizedText:", normalizedText);
 
         // ─── FIX: location extraction now handles Rapido's inconsistent PDF text
-        //         order internally — no blanket isRapido swap needed here.
+        //         order internally.
         const locations = extractLocationsAccurately(normalizedText);
 
         if (DEBUG) console.log("locations:", locations);
@@ -1006,7 +1003,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ]);
             });
 
-            const colW = { sno: 10, date: 25, time: 22, from: 37, to: 37, amount: 27, purpose: 24 };
+            const colW = { sno: 15, date: 25, time: 22, from: 37, to: 37, amount: 27, purpose: 24 };
             const cellPad = { top: 3.5, bottom: 3.5, left: 3, right: 3 };
 
             doc.autoTable({
