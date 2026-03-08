@@ -1055,7 +1055,7 @@ document.addEventListener("DOMContentLoaded", () => {
             doc.setFont("helvetica", "bold"); doc.setFontSize(10);
             const declaration =
                 "I have not availed the cab services for any personal purposes and all the bills " +
-                "submitted are true and original. I claim full responsibility for the details furnished in this annexure.";
+                "submitted are true and original. I claim full responsibility for the details furnished in this form.";
             const declLines = doc.splitTextToSize(declaration, USABLE);
             doc.text(declLines, LEFT, y);
             y += declLines.length * 5 + 10;
