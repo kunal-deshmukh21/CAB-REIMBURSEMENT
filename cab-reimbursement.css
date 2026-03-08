@@ -697,6 +697,7 @@ body {
   transition: border-color var(--transition), box-shadow var(--transition);
   font-family: var(--font);
   box-sizing: border-box;
+  text-align: center;
 }
 
 .table-input:focus {
